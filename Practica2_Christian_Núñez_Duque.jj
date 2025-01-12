@@ -1,0 +1,187 @@
+options {
+BUILD_TOKEN_MANAGER=true;
+COMMON_TOKEN_ACTION=false;
+DEBUG_PARSER=false;
+}
+
+PARSER_BEGIN(pr2)
+
+public class pr2 {
+
+    // Contador de etiquetas (LBL)
+    static private int nextTag=-1;
+    // Método que actualiza el contador de etiquetas
+    private static int getNextTag(){
+    	return ++nextTag;
+    }
+
+    public static void main(String args[]) throws ParseException, java.io.FileNotFoundException{	
+
+	// Variable asignada a la entrada
+	pr2TokenManager input;
+
+	// Condicional para comprobar el tipo de entrada
+	if(args.length < 1){
+		// Entrada estándar
+		input = new pr2TokenManager(new SimpleCharStream(System.in));
+	}else{
+		// Entrada por fichero
+		input = new pr2TokenManager(new SimpleCharStream(new java.io.FileInputStream(args[0]),0,0));
+	}
+
+	// Entrada por teclado
+	pr2 parser = new pr2(input);
+	// Llamada al axioma
+        pr2.stmts();
+
+    }
+}
+PARSER_END(pr2)
+
+// Símbolos que el analizador sintáctico ignora (espacios, saltos de línea, tabuladores, retornos de carro y comentarios).
+SKIP:
+{
+	" " | "\t" | "\n" | "\r"
+|	<COMENTARIO: "#" (~["\n" ,"\r"])*> 
+}
+
+// Símbolos terminales a reconocer por el analizador sintáctico
+TOKEN :
+{
+    < ESP: "<:" | "+=" | "-=" | "*=" | "/=" >
+|   < DIGIT: (["0" - "9"])+ >
+|   < READ: "read" > 
+|   < IF: "if" >
+|   < ELSE: "else" >
+|   < DO : "do" >
+|   < WHILE : "while" >
+|   < FROM : "from" >
+|   < FOR : "for" >
+|   < TO: "to" >
+|   < BY: "by" >
+|   < PRINT: "print" >
+|   < ID: (["a" - "z", "A" - "Z", "_"])+ >
+}
+
+// Axioma
+void stmts() : {} {
+  stmt() (";" stmts())?
+}
+
+// Símbolo no terminal que gestiona el acceso a bucles, condicionales, asignaciones y print y read.
+void stmt() : {} {
+  loop() | cond() | assig() | io()
+}
+
+// Símbolo no terminal que gestiona el funcionamiento de los bucles do-while y for
+void loop() : 
+{
+  // Tokenes: tk son los nombres de las variables, num es el límite del incremento del for y inc es el incremento en cada iteración
+  Token tk, num, inc = new Token(DIGIT, "1");
+  // Tag_ini y tag_fin son las etiquetas utilizadas
+  int tag_ini = getNextTag();
+  int tag_fin = getNextTag();
+} 
+{
+  // Bucles do-while
+  <DO> {System.out.print("LBL"+tag_ini+":\n");} stmts() <WHILE> "(" expr() ")" 
+  {System.out.print("\tsifalsovea LBL"+tag_fin+"\n\tvea LBL"+tag_ini+"\n"+"LBL"+tag_fin+":\n");}
+
+  // Bucles for
+| <FOR> "(" tk=<ID> {System.out.print("\tvalori "+tk.image+"\n");} <FROM> expr() {System.out.print("\tasigna\n");} 
+  <TO> num=<DIGIT> ( <BY> inc=<DIGIT> )? ")" "{" {System.out.print("LBL"+(tag_ini)+":\n");} stmts() {
+  	  // Escritura del interior de los paréntesis de los for
+	  System.out.print("\tvalori "+tk.image+"\n");
+	  System.out.print("\tvalord "+tk.image+"\n");
+	  System.out.print("\tmete "+inc.image+"\n");
+	  System.out.print("\tadd\n");	  
+	  System.out.print("\tasigna\n");	
+	  System.out.print("\tmete "+num.image+"\n");
+	  System.out.print("\tvalord "+tk.image+"\n");
+	  System.out.print("\tsub\n");
+	  System.out.print("\tsifalsovea LBL"+tag_fin+"\n\tvea LBL"+tag_ini+"\n"+"LBL"+tag_fin+":\n");}
+    "}"
+}
+
+// Símbolo no terminal que gestiona el funcionamiento de los condicionales if-else
+void cond() : 
+{
+  // Tag_ini y tag_fin son las etiquetas utilizadas
+  int tag_ini = getNextTag();    
+  int tag_fin = getNextTag();
+  // Variable que controla si hay o no un "else"; true--> no hay else, false--> si hay else
+  boolean falso = false;
+} 
+{
+  <IF> "(" expr() ")" {System.out.print("\tsifalsovea LBL"+tag_fin+"\n");} 
+  "{" stmts() "}" 
+  ( falso=cond_false(tag_ini, tag_fin) )? {
+  	if(!falso){
+  		// Si no hay else
+  		{System.out.print("LBL" + tag_fin + ":\n");}
+  	}else{
+  		// Si hay else
+  	  	{System.out.print("LBL" + tag_ini + ":\n");}
+  	}
+  }
+}
+
+// Método auxiliar para la gestión de condicionales
+boolean cond_false(int tag_ini, int tag_fin): {
+	// Variable que controla si hay o no un "else"; true--> no hay else, false--> si hay else
+	boolean cond = false;
+}
+{
+	<ELSE> {System.out.print("\tvea LBL"+tag_ini+"\n"+"LBL"+tag_fin+":\n"); cond = true;}
+	"{" stmts() "}" {return cond;}
+}
+
+
+// Símbolo no terminal que gestiona el print y read
+void io():
+{
+// Token que contiene la variable a leer por un "read"
+   Token tk;
+}
+{
+  <PRINT> expr() {System.out.print("\tprint\n");}
+| <READ> tk=<ID> {System.out.print("\tread " + tk.image + "\n");}
+}
+
+// Símbolo no terminal que gestiona el funcionamiento de las asignaciones y los operadores de incremento
+void assig():
+{
+// Tokenes: tk son los nombres de las variables, inc es el operador leído de incremento o el operador de asignación (<:)
+   Token tk, inc;
+}
+{
+  tk=<ID> {System.out.print("\tvalori " + tk.image + "\n");} inc=<ESP> {if (inc.image.equals("<:")==false) {System.out.print("\tvalord " + tk.image + "\n");}}
+  expr() {switch (inc.image){
+  		case "+=": System.out.print("\tadd\n"); break;
+  		case "-=": System.out.print("\tsub\n"); break;  		
+  		case "*=": System.out.print("\tmul\n"); break;  
+  		case "/=": System.out.print("\tdiv\n"); break;  
+  	}  {System.out.print("\tasigna\n");}
+  	}
+}
+
+// Símbolo no terminal que gestiona el funcionamiento de las sumas y restas
+void expr() : {} {
+  mult() ( ("+" mult() {System.out.print("\tadd\n");} | "-" mult() {System.out.print("\tsub\n");}) )* 
+}
+
+// Símbolo no terminal que gestiona el funcionamiento de los productos y divisiones
+void mult() : {} {
+  val() ( ("*" val() {System.out.print("\tmul\n");} | "/" val() {System.out.print("\tdiv\n");})  )*
+}
+
+// Símbolo no terminal que gestiona la recogida de números y nombres de variables
+void val() : {
+// Tk son los nombres de las variables o los números a introducir
+   Token tk;
+} 
+{
+  tk=<DIGIT> {System.out.print("\tmete " + tk.image + "\n");}  
+| tk=<ID> {System.out.print("\tvalord " + tk.image + "\n");}
+| "(" expr() ")" 
+}
